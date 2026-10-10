@@ -1,3 +1,3 @@
-[submodule "vendor/cFS"]
-	path = vendor/cFS
-	url = https://github.com/nasa/cFS.git
+[submodule "vendor/FreeRTOS-Kernel"]
+	path = vendor/FreeRTOS-Kernel
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git

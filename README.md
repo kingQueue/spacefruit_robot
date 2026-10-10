@@ -1,98 +1,119 @@
-# Spacefruit robot — cFS C starter
+# Spacefruit robot — C++ FreeRTOS starter
 
-A Raspberry Pi 5 development mission using NASA cFS v7.0.1, pinned as a
-Git submodule. `apps/robot_app` is editable source owned by this repository.
-The sample simulates moisture readings and reports a pump **request**; it
-does not connect to sensors, drive GPIO, or actuate a pump.
+A small robot development sample using **FreeRTOS Kernel V11.2.0** and its
+POSIX/Linux port, pinned to commit `0adc196d4bd52a2d91102b525b0aafc1e14a2386`.
+Application code is C++17; the upstream FreeRTOS kernel is C.
+There are no NASA framework components in the current source tree.
 
-## Raspberry Pi setup and first run
+This runs actual FreeRTOS tasks, a preemptive priority scheduler and queues
+**inside a Linux process** on Raspberry Pi OS. It is a development/simulation
+port, not a bare-metal Pi 5 operating system or a hard real-time guarantee.
+Linux still controls hardware and process scheduling.
 
-Use Raspberry Pi OS **64-bit**. In a terminal on your Pi:
+## Build and run on Raspberry Pi 5
+
+Use 64-bit Raspberry Pi OS. Install tools and clone:
 
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake git python3
 git clone --recurse-submodules https://github.com/kingQueue/spacefruit_robot.git
 cd spacefruit_robot
-python3 scripts/test_logic.py
-python3 scripts/build.py
-python3 tests/smoke_cfs.py
-python3 scripts/run.py
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
+./build/robot_demo
 ```
 
-Stop the foreground run with Ctrl+C. Run only one cFS instance at a time.
-If you already cloned without dependencies:
+Stop with Ctrl+C. For a finite run:
 
 ```bash
-git submodule update --init --recursive
+./build/robot_demo --samples 8
 ```
 
-Why these steps:
+If updating an existing clone, stop the old runtime, then:
 
-1. APT installs GCC/Make, CMake, Git and Python. Python scripts coordinate
-   the build and tests; the controller and cFS application are written in C.
-2. Recursive cloning retrieves the pinned framework and its pinned components.
-3. The logic test compiles the real controller with strict warnings and checks
-   threshold boundaries, hysteresis, invalid-input fail-off, counters and reset.
-4. The build script combines upstream configuration defaults with our mission
-   files, configures native Linux compilation and stages cFS and the app.
-   Native builds produce ARM64 code when run on your ARM64 Pi; no cross compiler
-   or `rpi_linux` target is needed.
-5. The smoke test starts the real framework and requires OPERATIONAL startup,
-   successful app loading, and the first three expected controller outputs.
-6. The run script starts the executable from the required runtime directory.
+```bash
+git pull --ff-only
+git submodule update --init --recursive
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
+```
 
-Expected output includes:
+Old build outputs or an orphaned vendor directory can remain in an existing
+checkout after an update; they are not part of the new tracked source.
+A fresh recursive clone avoids them.
+
+Why each step:
+1. The tools provide C/C++ compilers, CMake, Git and the integration test runner.
+2. Recursive cloning retrieves the exact pinned RTOS dependency.
+3. CMake configures the native Linux build: ARM64 on your Pi, x86-64 on a PC.
+4. Compilation builds the kernel and your C++ application.
+5. CTest checks controller behavior and executes the real scheduler/task pipeline.
+6. The executable starts three FreeRTOS tasks and feeds simulated readings.
+
+## Tasks and data flow
 
 ```text
-ROBOT_APP ready: simulated moisture control
-ROBOT_APP sample=1 moisture=20 pump=1
-ROBOT_APP sample=2 moisture=35 pump=1
-ROBOT_APP sample=3 moisture=50 pump=0
+sensor (priority 1, every 200 ms)
+    → bounded sensor queue
+control (priority 2, waits for readings)
+    → bounded report queue
+logger (priority 3, waits for reports)
+    → console
 ```
 
-## Edit your C app
+Higher numbers mean higher FreeRTOS priorities. Tasks block on queues rather than
+busy-waiting. The sensor uses `xTaskDelayUntil` for periodic scheduling.
+Only the logger performs console I/O, following the POSIX port's libc-lock guidance.
+Queue messages are plain structs copied by value; do not enqueue owning C++ objects
+such as `std::string` directly.
 
-* `apps/robot_app/fsw/src/robot_app.c`: cFS entry point, simulated inputs,
-  periodic task and diagnostic output.
-* `apps/robot_app/fsw/src/robot_control.c`: portable controller logic.
-* `apps/robot_app/fsw/inc/robot_control.h`: state and threshold configuration.
-* `tests/test_robot_control.c`: controller behavior tests.
-* `mission/`: app selection and startup registration.
+The controller requests a pump below 30% moisture, turns the request off at 45%,
+and retains its prior state between those thresholds. Readings above 100% are
+invalid and clear the request. No physical sensors or pump are connected.
 
-Below 30% requests pumping; at 45% or above stops requesting it. Between
-thresholds the previous state is retained, avoiding rapid on/off switching.
-Readings above 100% clear the request and count as invalid.
-
-After editing, stop any running instance and repeat:
-
-```bash
-python3 scripts/test_logic.py
-python3 scripts/build.py
-python3 tests/smoke_cfs.py
-python3 scripts/run.py
+Example output:
+```text
+sample=1 moisture=20 pump=1 valid=1
+sample=2 moisture=35 pump=1 valid=1
+sample=3 moisture=50 pump=0 valid=1
+sample=4 moisture=101 pump=0 valid=0
 ```
 
-Changing behavior intentionally may require updating the smoke test's expected
-sequence. Build output lives under `build/` and is not committed. Modify tracked
-`mission/` files, not the generated `build/robot_defs` copy. Use `BUILD_JOBS=1
-python3 scripts/build.py` on a memory-constrained machine.
+## Edit and test
 
-## Development on Windows
+- `src/main.cpp`: task entry points, priorities, period, simulated inputs, queues.
+- `src/robot_control.cpp`: hardware-independent decision logic.
+- `include/robot_control.hpp`: thresholds and controller state.
+- `config/FreeRTOSConfig.h`: kernel tick, task limits, heap and enabled APIs.
+- `tests/test_robot_control.cpp`: boundaries, hysteresis, invalid values, reset.
+- `tests/test_runtime.py`: actual queued task messages, ordering and finite shutdown.
 
-With GCC and Python installed, `python scripts/test_logic.py` runs locally.
-The cFS Linux PSP needs Linux: use WSL, a Linux host, or the Pi for build/run.
-GitHub Actions builds and boots the same mission on Ubuntu after each push.
-It does not test physical Pi hardware, GPIO or timing guarantees.
+After editing, rebuild and rerun CTest before running the demo. Intentionally
+changing the demo sequence may require changing integration-test expectations.
+GitHub Actions builds and runs both tests on Linux x86-64 and ARM64.
+ARM64 CI checks the CPU architecture, not physical Pi sensors or timing.
 
-## Growing this into a robot
+## Windows development
 
-Replace simulated inputs with a sensor adapter and keep the control logic
-independently testable. Add a hardware output adapter, watchdog, command handling
-and cFS Software Bus telemetry as needed. This minimal mission starts only
-`robot_app`; it does not yet include network commanding or a ground-system GUI.
-Linux cFS development does not turn Raspberry Pi OS into a hard real-time OS.
-The sample decision rule is not a complete hardware control/safety system.
+With G++ and Python available:
+```powershell
+python scripts/test_logic.py
+```
 
-NASA source and its licenses remain in `vendor/cFS` and its submodules.
-See [NASA cFS](https://github.com/nasa/cFS) for upstream documentation.
+The full RTOS demo needs Linux (Pi, WSL or a Linux development host).
+With CMake you can build just portable tests on other platforms using
+`-DROBOT_BUILD_RTOS=OFF`.
+
+## Hardware next steps
+
+Add sensor and output adapters while retaining independently tested logic.
+The sample is not a complete actuator control system. For strict timing or
+bare-metal operation, use an RTOS-supported hardware target and its hardware port;
+the Linux POSIX port does not supply Pi GPIO drivers.
+
+FreeRTOS remains under its upstream MIT license in
+`vendor/FreeRTOS-Kernel/LICENSE.md`. Upstream port implementation:
+https://github.com/FreeRTOS/FreeRTOS-Kernel/tree/V11.2.0/portable/ThirdParty/GCC/Posix

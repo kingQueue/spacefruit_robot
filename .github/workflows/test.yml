@@ -1,25 +1,23 @@
-name: Build and test robot cFS
+name: Build and test C++ FreeRTOS starter
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
 jobs:
   linux:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install build tools
+      - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake python3
-      - name: Test portable C control logic
-        run: python3 scripts/test_logic.py
-      - name: Build actual cFS mission and C app
-        run: python3 scripts/build.py
-      - name: Boot cFS and verify app behavior
-        run: python3 tests/smoke_cfs.py
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: cfs-smoke-log
-          path: build/smoke.log
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: Build C++ app and FreeRTOS kernel
+        run: cmake --build build --parallel 2
+      - name: Test controller and real RTOS task pipeline
+        run: ctest --test-dir build --output-on-failure
