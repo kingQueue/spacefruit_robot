@@ -1,0 +1,7 @@
+set(MISSION_NAME "SpacefruitRobot")
+set(SPACECRAFT_ID 0x42)
+set(MISSION_CPUNAMES cpu1)
+set(MISSION_GLOBAL_APPLIST)
+set(cpu1_PROCESSORID 1)
+set(cpu1_APPLIST robot_app)
+set(cpu1_SYSTEM native)

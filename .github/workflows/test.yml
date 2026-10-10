@@ -1,0 +1,25 @@
+name: Build and test robot cFS
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake python3
+      - name: Test portable C control logic
+        run: python3 scripts/test_logic.py
+      - name: Build actual cFS mission and C app
+        run: python3 scripts/build.py
+      - name: Boot cFS and verify app behavior
+        run: python3 tests/smoke_cfs.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cfs-smoke-log
+          path: build/smoke.log
