@@ -109,6 +109,31 @@ With CMake you can build just portable tests on other platforms using
 
 ## Hardware next steps
 
+The SpaceFruit garden workflow now has a C++ mission controller in
+`include/mission.hpp` / `src/mission.cpp`. It mirrors setup, editable-plan
+confirmation, exact seed loading, planting, care checks, readiness-gated
+harvesting and empty-cell replanting. Each hardware job has an ID and deadline;
+unverified results, timeouts and unsafe sensing stop the mission. See
+`docs/app-workflow.md` for the observed app sequence and integration contract.
+
+Run the full flow through two real FreeRTOS tasks and queues:
+
+```bash
+./build/mission_demo --simulate
+```
+
+This explicit simulation plants Radish/Onion, checks both, harvests Radish and
+replants its cell with Carrot. It does not operate hardware. There is no implicit
+simulation fallback when physical hardware is unavailable.
+
+`firmware/` contains an RP2040 target for the four TT/L298N motor channels and
+two VL53L1X sensors with command expiry, arming and a watchdog. Its driver loop
+uses Arduino; it is separate from the Pi FreeRTOS mission runtime. See
+`firmware/README.md` for proposed wiring and build instructions. Physical camera
+localization and the app-to-robot transport still need integration. The gripper
+is confirmed, but its servo calibration/arm geometry are unknown; seed and weed
+tools have not been designed, so those physical actions remain unavailable.
+
 Add sensor and output adapters while retaining independently tested logic.
 The sample is not a complete actuator control system. For strict timing or
 bare-metal operation, use an RTOS-supported hardware target and its hardware port;
