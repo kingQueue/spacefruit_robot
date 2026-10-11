@@ -19,7 +19,7 @@ Proposed GPIO wiring (verify YD-RP2040 breakout labels before assembly):
 | Physical motion-enable input | GP18, closed to GND permits arming |
 
 Remove L298N EN jumpers before connecting PWM. Use a common ground and a motor
-supply appropriate for the 3–6 V TT motors; the UPS's 6–18 V input specification
+supply appropriate for the 3â€“6 V TT motors; the UPS's 6â€“18 V input specification
 does not make that voltage safe for the motors. Motors are not powered by Pi GPIO.
 Provide hardware pull-downs on EN so channels remain disabled during MCU reset.
 The driver does not implement wheel velocity feedback: these motors have no
@@ -45,9 +45,8 @@ bench tested here. Initial motor direction tests need wheels raised and low PWM.
 USB commands are newline-delimited `A seq*CRC`, `D seq left right ttl*CRC` and
 `S seq*CRC`. Telemetry is `T ack front_mm rear_mm front_age rear_age armed fault*CRC`.
 CRC is CCITT-FALSE, initial FFFF, four uppercase hexadecimal digits. PWM magnitude
-is limited to 100/255; command TTL is 100–500 ms. The Pi must keep refreshing safe
-commands and stop on lost camera localization. Reconnect reads ACK before choosing
-the next sequence; reset disarms and restarts ACK at zero.
+is limited to 100/255; command TTL is 100â€“500 ms. The Pi must keep refreshing safe
+commands and stop on lost camera localization. ACK is the highest parsed command sequence, including commands rejected by a safety gate; inspect armed/fault to determine execution. Reconnect chooses ACK+1; reset disarms and restarts ACK at zero.
 
 Arm, gripper, seed dispenser and weed-removal actions are not implemented by this
 firmware. The owner confirmed a gripper but has not designed the other tools.

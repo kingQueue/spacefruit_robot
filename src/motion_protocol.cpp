@@ -44,15 +44,18 @@ bool MotionProtocol::receive(char* frame, std::uint32_t now, const MotionSensors
     std::uint32_t seq = 0, ttl = 0;
     int left = 0, right = 0;
     bool valid = space(p) && number(p, seq) && seq > acknowledged_;
-    if (valid && operation == 'A') valid = *p == '\0' && guard_.arm(seq, now, sensors);
+    if (valid && operation == 'A') valid = *p == '\0';
     else if (valid && operation == 'D') {
         valid = space(p) && pwm(p, left) && space(p) && pwm(p, right)
-            && space(p) && number(p, ttl) && *p == '\0'
-            && guard_.drive(seq, left, right, ttl, now, sensors);
+            && space(p) && number(p, ttl) && *p == '\0';
     } else valid = false;
     if (!valid) { guard_.stop(MotionFault::command); return false; }
+    // A valid command consumes its sequence even if a sensor/TTL/arming gate
+    // rejects execution. Reconnecting hosts can choose ACK+1 without replaying
+    // a sequence already consumed internally by MotionGuard.
     acknowledged_ = seq;
-    return true;
+    return operation == 'A' ? guard_.arm(seq,now,sensors)
+        : guard_.drive(seq,left,right,ttl,now,sensors);
 }
 MotionOutput MotionProtocol::poll(std::uint32_t now, const MotionSensors& sensors) noexcept {
     return guard_.poll(now, sensors);

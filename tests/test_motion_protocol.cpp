@@ -38,7 +38,9 @@ int main() {
     assert(send(protocol,"D 13 20 20 100",14,sensors));
     assert(!protocol.poll(114,sensors).armed);
     assert(!send(protocol,"D 14 20 20 100",114,sensors));
+    assert(protocol.acknowledged_sequence()==14);
+    assert(send(protocol,"A 15",115,sensors)); // recover using telemetry ACK+1
     assert(!protocol.receive(nullptr,115,sensors));
-    for (const char* bad : {"A", "A 0", "A +15", "A  15", "D 15 101 0 100", "D 15 0 0 99", "P 15"})
+    for (const char* bad : {"A", "A 0", "A +16", "A  16", "D 16 101 0 100", "D 16 0 0 99", "P 16"})
         assert(!send(protocol,bad,116,sensors));
 }
